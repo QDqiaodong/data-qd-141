@@ -1,0 +1,13 @@
+{
+  "before": [
+    "extract",
+    "clean",
+    "load"
+  ],
+  "after": [
+    "extract",
+    "validate",
+    "load",
+    "audit"
+  ]
+}
