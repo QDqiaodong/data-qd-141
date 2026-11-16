@@ -1,0 +1,44 @@
+{
+  "before": [
+    "extract",
+    "clean",
+    "load"
+  ],
+  "after": [
+    "extract",
+    "validate",
+    "load",
+    "audit"
+  ],
+  "consumers": [
+    {
+      "id": "reporter",
+      "reads_before": [
+        "clean",
+        "load"
+      ],
+      "reads_after": [
+        "validate",
+        "load"
+      ],
+      "window": [
+        1,
+        4
+      ]
+    },
+    {
+      "id": "journal",
+      "reads_before": [
+        "extract"
+      ],
+      "reads_after": [
+        "extract",
+        "audit"
+      ],
+      "window": [
+        2,
+        5
+      ]
+    }
+  ]
+}

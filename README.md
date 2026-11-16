@@ -13,6 +13,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --no-build-isolation --no-deps .
 .venv/bin/python -m pip check
 .venv/bin/sequence-align --source fixtures/input.json --output run/report.json
+.venv/bin/sequence-align --plan --source fixtures/plan.json --output run/plan-report.json
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
@@ -24,8 +25,9 @@ python3 -m venv .venv
 输入和输出不得相同，输出符号链接拒绝。单操作者批处理，不承诺并发发布或断电恢复。
 同输入重跑不累加。测试使用临时目录，运行产物在忽略的run/。
 
-src/sequence_align/model.py 为业务模型，相关算法模块独立组织；common.py 提供受限JSON及报告发布，
-cli.py 衔接数据链路。fixtures 为明确自制样例，代码与样例采用MIT许可。
+src/sequence_align/model.py 为业务模型，alignment.py 提供最小编辑对齐，
+planning.py 提供字段迁移计划，common.py 提供受限JSON及报告发布，cli.py 衔接数据链路。
+fixtures 为明确自制样例，代码与样例采用MIT许可。
 
 ## 当前业务与样例
 # Unit edit sequence alignment v1
@@ -33,4 +35,9 @@ cli.py 衔接数据链路。fixtures 为明确自制样例，代码与样例采�
 为版本数据整理者比较有序token快照，before/after各最多500个非空字符串，重复token合法且不去重。插入、删除、替换代价均1，相同匹配0；动态规划计算最小Levenshtein距离，回溯并输出可顺序重放的操作列表。每操作包含before_index/after_index游标和source/target，空侧null。
 等价最优路径优先match/replace对角，再delete，再insert，保证确定性而非声称唯一最优脚本。匹配操作也保留，应用脚本必须恰消耗before并重建after；报告计数和distance。样例替换clean→validate并插入audit，距离2。
 当前只处理显式token列表，不读取文件树、不检测移动、不合并并发编辑、不声称文本语义或版本控制系统等价；总计算空间O(nm)，界限500避免无界矩阵。
+
+# 字段版本迁移计划 v1
+
+`--plan` 是面向数据平台维护者的新入口：输入 `before`/`after`（最多8个唯一字段）与1至6个消费者，输出分段迁移计划。候选复用旧对齐脚本，严格按前后字段差生成add/drop，共享字段重排不产生候选，replace只是add+drop的显示分组。计划阶段上限8、每阶段最多2项字段变更，固定先add、再切换消费者、后drop；消费者须在窗口内恰好切换一次，无空阶段。有解输出 `satisfiable` 与逐阶段计划，无解输出 `unsatisfiable` 与阻塞条件。细节见 [数据契约](docs/contract.md)，样例见 `fixtures/plan.json`。
+
 
