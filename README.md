@@ -41,3 +41,55 @@ fixtures 为明确自制样例，代码与样例采用MIT许可。
 `--plan` 是面向数据平台维护者的新入口：输入 `before`/`after`（最多8个唯一字段）与1至6个消费者，输出分段迁移计划。候选复用旧对齐脚本，严格按前后字段差生成add/drop，共享字段重排不产生候选，replace只是add+drop的显示分组。计划阶段上限8、每阶段最多2项字段变更，固定先add、再切换消费者、后drop；消费者须在窗口内恰好切换一次，无空阶段。有解输出 `satisfiable` 与逐阶段计划，无解输出 `unsatisfiable` 与阻塞条件。细节见 [数据契约](docs/contract.md)，样例见 `fixtures/plan.json`。
 
 
+# 本地 SQLite CDC 历史物化器
+
+`src/cdc_materializer/` 为数据仓库维护者提供仅依赖标准库与 SQLite 的变更数据捕获
+（CDC）历史物化器。完整语义与拒绝原因码见 [CDC 契约](docs/cdc_contract.md)。
+
+能力摘要：
+
+- 按 `source`/`entity`/`revision` 接纳 `upsert`/`retract` 批次；坏记录逐条拒绝
+  （稳定原因码），不拖垮整批；已接纳事件不可改写，修正只能追加更高 revision。
+- 批次按内容哈希幂等重投；同 id 不同内容报 `BatchConflictError`。
+- 每个成功批次分配连续、持久、重试不重复的知识序号；支持按 `event_id` 与
+  `(source, entity, revision)` 查询接纳/拒绝结论。
+- 双时态区间表只追加、只关闭：修订关闭旧知识版本并重切区间，旧 `known_through`
+  查询永久不变；查询走 WAL 快照，绝不混用提交前后的区间。
+- 接纳、序号、区间重切、批次登记在单个 `BEGIN IMMEDIATE` 事务内全成或全败，
+  崩溃后重试可恢复，查询观察不到半完成批次。
+
+```sh
+PYTHONPATH=src python3 -m cdc_materializer.cli ingest \
+    --db run/cdc.db --batch-id b1 --input fixtures/cdc_batch_1.json
+PYTHONPATH=src python3 -m cdc_materializer.cli ingest \
+    --db run/cdc.db --batch-id b2 --input fixtures/cdc_batch_2.json
+# 业务时点 + 知识截止两个维度；省略 --known-through 即取当前知识头
+PYTHONPATH=src python3 -m cdc_materializer.cli query --db run/cdc.db \
+    --sources orders --entities order-7 \
+    --as-of 2026-03-01T00:00:00+00:00 --known-through 1
+PYTHONPATH=src python3 -m cdc_materializer.cli event --db run/cdc.db --event-id evt-0003
+PYTHONPATH=src python3 -m cdc_materializer.cli revision \
+    --db run/cdc.db --source orders --entity order-7 --revision 4
+```
+
+编程接口：
+
+```python
+from cdc_materializer import Materializer
+
+with Materializer("run/cdc.db") as mat:
+    mat.ingest_batch("b1", records)                 # 含逐条 accepted/rejected
+    mat.query_materialized(["orders"], ["order-7"],
+                           "2026-03-01T00:00:00+00:00", known_through=1)
+    mat.lookup_event("evt-0001")
+    mat.lookup_revision("orders", "order-7", 4)
+```
+
+测试（含乱序到达、重复批次、冲突、撤回链/环、空结果、两个截止维度、随机化
+oracle 对照与事务失败恢复）：
+
+```sh
+PYTHONPATH=src python3 -m unittest tests.test_cdc_materializer -v
+```
+
+

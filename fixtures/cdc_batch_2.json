@@ -1,0 +1,38 @@
+[
+  {
+    "event_id": "evt-0003",
+    "source": "orders",
+    "entity": "order-7",
+    "revision": 3,
+    "op": "retract",
+    "valid_time": "2026-05-15T00:00:00+00:00",
+    "target_event_id": "evt-0001"
+  },
+  {
+    "event_id": "evt-0004",
+    "source": "orders",
+    "entity": "order-7",
+    "revision": 4,
+    "op": "upsert",
+    "valid_time": "2026-02-01T00:00:00+00:00",
+    "value": {"status": "placed", "amount": 120}
+  },
+  {
+    "event_id": "evt-bad-1",
+    "source": "orders",
+    "entity": "order-7",
+    "revision": "not-an-int",
+    "op": "upsert",
+    "valid_time": "2026-02-01T00:00:00+00:00",
+    "value": {"status": "placed"}
+  },
+  {
+    "event_id": "evt-bad-2",
+    "source": "orders",
+    "entity": "order-7",
+    "revision": 9,
+    "op": "retract",
+    "valid_time": "2026-05-15T00:00:00+00:00",
+    "target_event_id": "does-not-exist"
+  }
+]
