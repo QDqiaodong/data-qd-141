@@ -1,0 +1,4 @@
+{
+  "left": ["extract", "validate", "load", "audit", "reconcile"],
+  "right": ["extract", "normalize", "load", "audit", "publish"]
+}

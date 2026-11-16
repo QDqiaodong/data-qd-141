@@ -93,3 +93,38 @@ PYTHONPATH=src python3 -m unittest tests.test_cdc_materializer -v
 ```
 
 
+
+# 三方序列合并工作台
+
+`src/sequence_align/merge.py` 与 `workspace.py` 为维护有序 ident 清单的团队提供
+三方合并审阅：以共同 `base` 为基准，分别对齐 `left` 与 `right`，把连续非 match
+操作归为 hunk 并按跨侧重叠连成连通分量；单侧或两侧投影相同的分量自动应用，
+其余成为待裁决冲突。冲突身份由固定 base 摘要、base 范围与排序后的成员 hunk 决定，
+因此刷新时其它位置的修改不会使已保存的裁决失效，而成员或投影改变、分裂、合并或
+转为自动分量时旧裁决必须失效。规则 `requires`/`before` 作用于完整清单，重复项
+不去重；`resolve` 整批需留下完整合法补全，`export` 未决时退出 2。
+
+```sh
+PYTHONPATH=src python3 -m sequence_align.merge_cli create \
+    --db run/merge.db --input fixtures/merge.json --output run/merge-inspect.json
+PYTHONPATH=src python3 -m sequence_align.merge_cli resolve \
+    --db run/merge.db --input fixtures/merge_decisions.json --expected-revision 0
+PYTHONPATH=src python3 -m sequence_align.merge_cli inspect --db run/merge.db
+PYTHONPATH=src python3 -m sequence_align.merge_cli export \
+    --db run/merge.db --output run/merged.json
+# refresh 只替换 left/right；base 与 rules 不变
+PYTHONPATH=src python3 -m sequence_align.merge_cli refresh \
+    --db run/merge.db --input fixtures/merge_refresh.json --expected-revision 1
+PYTHONPATH=src python3 -m sequence_align.merge_cli inspect --db run/merge.db
+```
+
+`fixtures/merge.json` 是基线样例，`fixtures/merge_decisions.json` 给出裁决样例，
+`fixtures/merge_refresh.json` 演示只替换两侧输入。完整语义见
+[合并契约](docs/merge_contract.md)。
+
+测试（含独立参考实现对照 hunk/分量/可补全性与支持性、刷新联动、两进程并发、
+提交前失败恢复）：
+
+```sh
+PYTHONPATH=src python3 -m unittest tests.test_merge -v
+```

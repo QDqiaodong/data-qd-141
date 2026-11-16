@@ -41,3 +41,24 @@ def save(path,report):
         os.replace(temp,dest)
     finally:
         if temp and os.path.exists(temp):os.unlink(temp)
+
+def stage(path,report):
+    """Stage a report beside ``path``; publish it later with :func:`publish`."""
+    dest=Path(path)
+    if dest.is_symlink():raise ValueError('output cannot be a symlink')
+    dest.parent.mkdir(parents=True,exist_ok=True);temp=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=dest.parent,delete=False) as stream:
+            temp=stream.name;json.dump(report,stream,sort_keys=True,ensure_ascii=False,allow_nan=False,indent=2);stream.write('\n')
+    except BaseException:
+        if temp and os.path.exists(temp):os.unlink(temp)
+        raise
+    return dest,temp
+
+def publish(dest,temp):
+    try:os.replace(temp,dest)
+    finally:
+        if os.path.exists(temp):os.unlink(temp)
+
+def discard(temp):
+    if temp and os.path.exists(temp):os.unlink(temp)

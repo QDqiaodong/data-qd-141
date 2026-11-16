@@ -9,6 +9,7 @@ requires-python = ">=3.11"
 dependencies = []
 [project.scripts]
 sequence-align = "sequence_align.cli:main"
+sequence-merge = "sequence_align.merge_cli:main"
 cdc-materialize = "cdc_materializer.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
