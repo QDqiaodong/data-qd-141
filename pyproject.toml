@@ -11,5 +11,6 @@ dependencies = []
 sequence-align = "sequence_align.cli:main"
 sequence-merge = "sequence_align.merge_cli:main"
 cdc-materialize = "cdc_materializer.cli:main"
+lake-compactor = "lake_compactor.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,0 +1,8 @@
+{
+  "data_files": [
+    {"partition": "orders", "path": "data/orders_a.jsonl"},
+    {"partition": "orders", "path": "data/orders_b.jsonl"},
+    {"partition": "customers", "path": "data/customers_a.jsonl"}
+  ],
+  "deletes": []
+}

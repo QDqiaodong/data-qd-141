@@ -1,0 +1,2 @@
+{"key": "order-3", "value": {"status": "placed", "amount": 25}}
+{"key": "order-4", "value": {"status": "cancelled", "amount": 60}}

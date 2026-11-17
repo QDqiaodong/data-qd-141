@@ -128,3 +128,60 @@ PYTHONPATH=src python3 -m sequence_align.merge_cli inspect --db run/merge.db
 ```sh
 PYTHONPATH=src python3 -m unittest tests.test_merge -v
 ```
+
+
+# 离线数据湖小文件压实与快照安全回收
+
+`src/lake_compactor/` 为离线数据湖维护者提供仅依赖标准库与 SQLite 的小文件
+压实与快照安全回收工具。完整语义、发布协议与正确性代价见
+[压实契约](docs/lake_contract.md)。数据始终是工具独占目录下的不可变 JSONL
+文件，SQLite 目录册只存元数据（文件、快照成员、delete 位置、pin），不存行内容。
+
+能力摘要：
+
+- `init` 建空快照 0；`append` 导入严格 JSON 清单（`data_files`+`deletes`），
+  逐字节复制源文件并记录 SHA256，每行获不可变身份
+  `(origin_file_id, 原行号, data_seq)`；任何非法行整次失败、不占序号。
+- `compact` 只重写指定分区中显式选定的 ≥2 个当前文件，按确定性排序输出，
+  保留原始身份与 `data_seq`；新快照恰保留仍命中未选文件的 delete 谓词。
+- `pin`/`scan`/`unpin`/`expire` 提供无租期的快照保活：token 持久、跨进程
+  有效；`gc` 只删除不被当前头、未过期快照或有效 pin 引用的工具文件。
+- 每次变更在单个 `BEGIN IMMEDIATE` 事务内完成文件发布与头切换；
+  `expected_snapshot` 失配不提交；文件损坏报稳定 `CorruptionError`。
+
+```sh
+PYTHONPATH=src python3 -m lake_compactor.cli init --home run/lake
+PYTHONPATH=src python3 -m lake_compactor.cli append --home run/lake \
+    --input fixtures/lake/manifest_append1.json --expected-snapshot 0
+PYTHONPATH=src python3 -m lake_compactor.cli append --home run/lake \
+    --input fixtures/lake/manifest_append2.json --expected-snapshot 1
+PYTHONPATH=src python3 -m lake_compactor.cli compact --home run/lake \
+    --partition orders --files d000001,d000002 --expected-snapshot 2 \
+    --target-rows 100
+PYTHONPATH=src python3 -m lake_compactor.cli pin --home run/lake --snapshot 3
+PYTHONPATH=src python3 -m lake_compactor.cli scan --home run/lake --token pin-...
+PYTHONPATH=src python3 -m lake_compactor.cli expire --home run/lake --snapshot 2
+PYTHONPATH=src python3 -m lake_compactor.cli unpin --home run/lake --token pin-...
+PYTHONPATH=src python3 -m lake_compactor.cli gc --home run/lake
+```
+
+编程接口：
+
+```python
+from lake_compactor import Lake
+
+Lake.init("run/lake")
+with Lake("run/lake") as lake:
+    report = lake.append("fixtures/lake/manifest_append1.json", expected_snapshot=0)
+    token = lake.pin(report["snapshot_id"])["token"]
+    rows = lake.scan(token)["rows"]
+    lake.unpin(token)
+    lake.gc()
+```
+
+测试（含独立 bag 解释器对照、部分压实 delete 边界、真实双进程 pin/gc 交错、
+两个强制退出点的重开恢复、损坏稳定报错）：
+
+```sh
+PYTHONPATH=src python3 -m unittest tests.test_lake_compactor -v
+```
